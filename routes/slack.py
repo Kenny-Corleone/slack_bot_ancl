@@ -91,6 +91,7 @@ def handle_showlist_command():
     
     data = request.form
     channel_id = data.get("channel_id")
+    user_id = data.get("user_id")
     
     # Get all tasks for this channel
     tasks = Task.query.filter_by(channel_id=channel_id).order_by(Task.created_at.desc()).all()
@@ -147,7 +148,7 @@ def handle_showlist_command():
     response_text = "*Task List:*\n" + "\n".join(task_list)
     
     return jsonify({
-        "response_type": "in_channel",
+        "response_type": "ephemeral",
         "text": response_text,
         "attachments": attachments
     })
@@ -207,6 +208,23 @@ def handle_interactive():
             })
     
     return jsonify({"text": "Action completed"})
+
+@slack_bp.route("/createtaskchannel", methods=["POST"])
+def handle_createtaskchannel_command():
+    """Handle /createtaskchannel slash command - creates a dedicated task channel"""
+    if not verify_slack_request(request):
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    data = request.form
+    user_id = data.get("user_id")
+    channel_id = data.get("channel_id")
+    
+    # This would require additional Slack API calls to create a channel
+    # For now, we'll provide instructions
+    return jsonify({
+        "response_type": "ephemeral",
+        "text": "📋 *Создание канала для задач:*\n\n1. Создайте новый канал с названием `#tasks` или `#задачи`\n2. Добавьте туда всех участников команды\n3. Используйте команды `/addtask` и `/showlist` в этом канале\n\n*Преимущества:*\n• Все задачи в одном месте\n• Нет путаницы в общих чатах\n• Легко отслеживать прогресс"
+    })
 
 @slack_bp.route("/test", methods=["GET"])
 def test_endpoint():
