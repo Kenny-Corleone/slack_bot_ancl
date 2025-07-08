@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  slack-bot:
+    build: .
+    ports:
+      - "5000:5000"
+    environment:
+      - SLACK_SIGNING_SECRET=e178377b1931850482d86a6920d7ef00
+      - SLACK_BOT_TOKEN=xoxb-9153598789972-9163840334662-quLu21epAVWYaDdAN11M3gOx
+      - SLACK_APP_TOKEN=xapp-1-A094Z78RBN0-9180856017889-be5c3d466513ada2fbba58c60366f952527a4224aefa6bcd2be99e5bd71893dc
+      - SECRET_KEY=your-secret-key-here
+      - DATABASE_URL=sqlite:///tasks.db
+      - FLASK_ENV=production
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s 

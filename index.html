@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Task Assignment Bot for Slack</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: white;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            text-align: center;
+        }
+        
+        .logo {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin-bottom: 20px;
+        }
+        
+        .tagline {
+            font-size: 1.2rem;
+            margin-bottom: 40px;
+            opacity: 0.9;
+        }
+        
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 30px;
+            margin: 60px 0;
+        }
+        
+        .feature {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 30px;
+            border-radius: 10px;
+            backdrop-filter: blur(10px);
+        }
+        
+        .feature h3 {
+            margin-top: 0;
+            font-size: 1.5rem;
+        }
+        
+        .commands {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 30px;
+            border-radius: 10px;
+            margin: 40px 0;
+            text-align: left;
+            backdrop-filter: blur(10px);
+        }
+        
+        .commands h3 {
+            text-align: center;
+            margin-top: 0;
+        }
+        
+        .command {
+            margin: 15px 0;
+            font-family: 'Courier New', monospace;
+            background: rgba(0, 0, 0, 0.2);
+            padding: 10px;
+            border-radius: 5px;
+        }
+        
+        .team-members {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 30px;
+            border-radius: 10px;
+            margin: 40px 0;
+            backdrop-filter: blur(10px);
+        }
+        
+        .team-members h3 {
+            margin-top: 0;
+        }
+        
+        .member-list {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin: 20px 0;
+        }
+        
+        .member {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-weight: bold;
+        }
+        
+        .setup {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 30px;
+            border-radius: 10px;
+            margin: 40px 0;
+            backdrop-filter: blur(10px);
+        }
+        
+        .setup h3 {
+            margin-top: 0;
+        }
+        
+        .setup ol {
+            text-align: left;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        
+        .setup li {
+            margin: 10px 0;
+        }
+        
+        .endpoint {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 10px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">📋 Task Assignment Bot for Slack</div>
+        <div class="tagline">Assign and track tasks for your team directly in Slack</div>
+        
+        <div class="features">
+            <div class="feature">
+                <h3>Task Assignment</h3>
+                <p>Create tasks and assign them to specific team members with interactive buttons.</p>
+            </div>
+            <div class="feature">
+                <h3>Status Tracking</h3>
+                <p>Track task progress with three status levels: Done, In Progress, and Not Done.</p>
+            </div>
+            <div class="feature">
+                <h3>Team Management</h3>
+                <p>Manage tasks for your team members with dispatcher control over status updates.</p>
+            </div>
+        </div>
+        
+        <div class="team-members">
+            <h3>Team Members</h3>
+            <p>Tasks can be assigned to the following team members:</p>
+            <div class="member-list">
+                <div class="member">David</div>
+                <div class="member">Emma</div>
+                <div class="member">Nora</div>
+                <div class="member">Eric</div>
+                <div class="member">Kenny</div>
+            </div>
+        </div>
+        
+        <div class="commands">
+            <h3>Available Commands</h3>
+            <div class="command">/addtask [task description] - Create and assign a new task</div>
+            <div class="command">/showlist - Display all tasks with status controls</div>
+        </div>
+        
+        <div class="setup">
+            <h3>Setup Instructions</h3>
+            <ol>
+                <li>Go to <a href="https://api.slack.com/apps" target="_blank" style="color: #fff;">https://api.slack.com/apps</a> and create a new Slack app</li>
+                <li>Add the following slash commands:
+                    <div class="endpoint">Command: /addtask</div>
+                    <div class="endpoint">Request URL: [YOUR_DOMAIN]/slack/addtask</div>
+                    <div class="endpoint">Command: /showlist</div>
+                    <div class="endpoint">Request URL: [YOUR_DOMAIN]/slack/showlist</div>
+                </li>
+                <li>Add the following interactive component:
+                    <div class="endpoint">Request URL: [YOUR_DOMAIN]/slack/interactive</div>
+                </li>
+                <li>Install the app to your workspace</li>
+                <li>Set your Slack signing secret as an environment variable</li>
+            </ol>
+        </div>
+        
+        <div class="setup">
+            <h3>How It Works</h3>
+            <ol>
+                <li><strong>Create Task:</strong> Use <code>/addtask [description]</code> to create a new task</li>
+                <li><strong>Assign Member:</strong> Click on a team member button to assign the task</li>
+                <li><strong>View Tasks:</strong> Use <code>/showlist</code> to see all tasks with dates and status</li>
+                <li><strong>Update Status:</strong> Click status buttons to change task progress (dispatcher control)</li>
+            </ol>
+        </div>
+    </div>
+</body>
+</html>
+
