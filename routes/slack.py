@@ -1,12 +1,13 @@
 from flask import Blueprint, request, jsonify
 from models.task import Task
-from app import db
 import json
 import hmac
 import hashlib
 import time
 import os
 import requests
+
+from database import db
 
 slack_bp = Blueprint("slack", __name__)
 
