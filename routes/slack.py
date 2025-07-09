@@ -6,6 +6,7 @@ import hmac
 import hashlib
 import time
 import os
+import requests
 
 slack_bp = Blueprint("slack", __name__)
 
@@ -13,6 +14,9 @@ slack_bp = Blueprint("slack", __name__)
 SLACK_SIGNING_SECRET = os.environ.get("SLACK_SIGNING_SECRET", "e178377b1931850482d86a6920d7ef00")
 SLACK_BOT_TOKEN = os.environ.get("SLACK_BOT_TOKEN", "xoxb-9153598789972-9163840334662-quLu21epAVWYaDdAN11M3gOx")
 SLACK_APP_TOKEN = os.environ.get("SLACK_APP_TOKEN", "xapp-1-A094Z78RBN0-9180856017889-be5c3d466513ada2fbba58c60366f952527a4224aefa6bcd2be99e5bd71893dc")
+
+# Slack API endpoints
+SLACK_API_BASE = "https://slack.com/api"
 
 # Team members for task assignment
 TEAM_MEMBERS = ["David", "Emma", "Nora", "Eric", "Kenny"]
@@ -162,6 +166,18 @@ def handle_interactive():
     payload = json.loads(request.form.get("payload"))
     user_id = payload["user"]["id"]
     
+    # Handle home tab interactions
+    if payload.get("type") == "view_submission":
+        return handle_view_submission(payload)
+    
+    # Handle button clicks from home tab
+    if payload.get("type") == "block_actions":
+        return handle_block_actions(payload)
+    
+    # Handle legacy interactive components
+    if payload.get("type") == "interactive_message":
+        return handle_legacy_interactive(payload)
+    
     # Handle task assignment
     if payload["callback_id"] == "assign_task":
         action = payload["actions"][0]
@@ -207,7 +223,337 @@ def handle_interactive():
                 "replace_original": False
             })
     
+            return jsonify({"text": "Action completed"})
+
+def handle_view_submission(payload):
+    """Handle view submission from home tab"""
+    try:
+        user_id = payload["user"]["id"]
+        view = payload["view"]
+        
+        if view["callback_id"] == "create_task_modal":
+            # Handle task creation from modal
+            values = view["state"]["values"]
+            task_description = values["task_description"]["task_input"]["value"]
+            assigned_to = values["assigned_to"]["assignee_select"]["selected_option"]["value"]
+            
+            # Create new task
+            new_task = Task(
+                task_description=task_description,
+                assigned_to=assigned_to,
+                channel_id="home_tab",  # Special identifier for home tab tasks
+                dispatcher_id=user_id
+            )
+            db.session.add(new_task)
+            db.session.commit()
+            
+            # Update home tab
+            update_home_tab(user_id)
+            
+            return jsonify({"response_action": "clear"})
+        
+        return jsonify({"response_action": "clear"})
+    except Exception as e:
+        print(f"Error handling view submission: {e}")
+        return jsonify({"response_action": "clear"})
+
+def handle_block_actions(payload):
+    """Handle block actions from home tab"""
+    try:
+        user_id = payload["user"]["id"]
+        actions = payload["actions"]
+        
+        for action in actions:
+            action_id = action["action_id"]
+            
+            if action_id == "create_task":
+                # Open task creation modal
+                return open_task_creation_modal(user_id)
+            
+            elif action_id == "refresh_tasks":
+                # Refresh home tab
+                update_home_tab(user_id)
+                return jsonify({"text": "Tasks refreshed!"})
+            
+            elif action_id.startswith("change_status_"):
+                # Handle status change
+                task_id = int(action_id.split("_")[-1])
+                value = json.loads(action["value"])
+                
+                task = Task.query.get(task_id)
+                if task:
+                    task.status = value.get("status", "done")
+                    db.session.commit()
+                    update_home_tab(user_id)
+                
+                return jsonify({"text": "Status updated!"})
+        
+        return jsonify({"text": "Action completed"})
+    except Exception as e:
+        print(f"Error handling block actions: {e}")
+        return jsonify({"text": "Error occurred"})
+
+def handle_legacy_interactive(payload):
+    """Handle legacy interactive components"""
+    user_id = payload["user"]["id"]
+    
+    # Handle task assignment
+    if payload["callback_id"] == "assign_task":
+        action = payload["actions"][0]
+        task_data = json.loads(action["value"])
+        
+        # Create new task
+        new_task = Task(
+            task_description=task_data["task"],
+            assigned_to=task_data["member"],
+            channel_id=task_data["channel_id"],
+            dispatcher_id=task_data["dispatcher_id"]
+        )
+        db.session.add(new_task)
+        db.session.commit()
+        
+        # Update home tab for the assigned user
+        update_home_tab(task_data["member"])
+        
+        return jsonify({
+            "response_type": "in_channel",
+            "text": f"✅ Task assigned to *{task_data['member']}*: {task_data['task']}",
+            "replace_original": True
+        })
+    
+    # Handle status changes
+    elif payload["callback_id"].startswith("change_status_"):
+        task_id = int(payload["callback_id"].split("_")[-1])
+        action = payload["actions"][0]
+        status_data = json.loads(action["value"])
+        
+        task = Task.query.get(task_id)
+        if task:
+            old_status = task.status
+            task.status = status_data["status"]
+            db.session.commit()
+            
+            status_emoji = {
+                "done": "✅",
+                "no": "❌",
+                "in progress": "🔄"
+            }.get(task.status, "❓")
+            
+            return jsonify({
+                "response_type": "in_channel",
+                "text": f"{status_emoji} <@{user_id}> changed task status: \"{task.task_description}\" → *{task.status}*",
+                "replace_original": False
+            })
+    
     return jsonify({"text": "Action completed"})
+
+def open_task_creation_modal(user_id):
+    """Open modal for task creation"""
+    try:
+        modal_view = {
+            "type": "modal",
+            "callback_id": "create_task_modal",
+            "title": {
+                "type": "plain_text",
+                "text": "Создать задачу",
+                "emoji": True
+            },
+            "submit": {
+                "type": "plain_text",
+                "text": "Создать",
+                "emoji": True
+            },
+            "close": {
+                "type": "plain_text",
+                "text": "Отмена",
+                "emoji": True
+            },
+            "blocks": [
+                {
+                    "type": "input",
+                    "block_id": "task_description",
+                    "label": {
+                        "type": "plain_text",
+                        "text": "Описание задачи",
+                        "emoji": True
+                    },
+                    "element": {
+                        "type": "plain_text_input",
+                        "action_id": "task_input",
+                        "multiline": True,
+                        "placeholder": {
+                            "type": "plain_text",
+                            "text": "Опишите задачу..."
+                        }
+                    }
+                },
+                {
+                    "type": "input",
+                    "block_id": "assigned_to",
+                    "label": {
+                        "type": "plain_text",
+                        "text": "Назначить на",
+                        "emoji": True
+                    },
+                    "element": {
+                        "type": "static_select",
+                        "action_id": "assignee_select",
+                        "placeholder": {
+                            "type": "plain_text",
+                            "text": "Выберите участника",
+                            "emoji": True
+                        },
+                        "options": [
+                            {
+                                "text": {
+                                    "type": "plain_text",
+                                    "text": member,
+                                    "emoji": True
+                                },
+                                "value": member
+                            } for member in TEAM_MEMBERS
+                        ]
+                    }
+                }
+            ]
+        }
+        
+        response = requests.post(
+            f"{SLACK_API_BASE}/views.open",
+            headers={
+                "Authorization": f"Bearer {SLACK_BOT_TOKEN}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "trigger_id": user_id,  # This should be the actual trigger_id
+                "view": modal_view
+            }
+        )
+        
+        return response.json()
+    except Exception as e:
+        print(f"Error opening modal: {e}")
+        return jsonify({"text": "Error opening modal"})
+
+def update_home_tab(user_id, channel_id=None):
+    """Update the home tab for a user with their tasks"""
+    try:
+        # Get tasks for the user
+        if channel_id:
+            tasks = Task.query.filter_by(channel_id=channel_id).order_by(Task.created_at.desc()).all()
+        else:
+            # Get all tasks assigned to this user
+            tasks = Task.query.filter_by(assigned_to=user_id).order_by(Task.created_at.desc()).all()
+        
+        # Create blocks for the home tab
+        blocks = [
+            {
+                "type": "header",
+                "text": {
+                    "type": "plain_text",
+                    "text": "📋 Task Manager",
+                    "emoji": True
+                }
+            },
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": "Управляйте задачами прямо здесь!"
+                }
+            },
+            {
+                "type": "divider"
+            }
+        ]
+        
+        if tasks:
+            for task in tasks:
+                status_emoji = {
+                    "done": "✅",
+                    "no": "❌", 
+                    "in progress": "🔄"
+                }.get(task.status, "❓")
+                
+                task_block = {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": f"{status_emoji} *{task.task_description}*\n"
+                               f"📅 {task.created_at.strftime('%Y-%m-%d %H:%M')}\n"
+                               f"👤 Назначено: {task.assigned_to}\n"
+                               f"📊 Статус: {task.status}"
+                    },
+                    "accessory": {
+                        "type": "button",
+                        "text": {
+                            "type": "plain_text",
+                            "text": "Изменить статус",
+                            "emoji": True
+                        },
+                        "value": json.dumps({"task_id": task.id, "action": "change_status"}),
+                        "action_id": f"change_status_{task.id}"
+                    }
+                }
+                blocks.append(task_block)
+                blocks.append({"type": "divider"})
+        else:
+            blocks.append({
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": "🎉 У вас пока нет задач! Используйте `/addtask` для создания новой задачи."
+                }
+            })
+        
+        # Add action buttons
+        blocks.extend([
+            {
+                "type": "actions",
+                "elements": [
+                    {
+                        "type": "button",
+                        "text": {
+                            "type": "plain_text",
+                            "text": "Создать задачу",
+                            "emoji": True
+                        },
+                        "style": "primary",
+                        "action_id": "create_task"
+                    },
+                    {
+                        "type": "button",
+                        "text": {
+                            "type": "plain_text",
+                            "text": "Обновить",
+                            "emoji": True
+                        },
+                        "action_id": "refresh_tasks"
+                    }
+                ]
+            }
+        ])
+        
+        # Update the home tab
+        response = requests.post(
+            f"{SLACK_API_BASE}/views.publish",
+            headers={
+                "Authorization": f"Bearer {SLACK_BOT_TOKEN}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "user_id": user_id,
+                "view": {
+                    "type": "home",
+                    "blocks": blocks
+                }
+            }
+        )
+        
+        return response.json()
+    except Exception as e:
+        print(f"Error updating home tab: {e}")
+        return None
 
 @slack_bp.route("/createtaskchannel", methods=["POST"])
 def handle_createtaskchannel_command():
@@ -225,6 +571,26 @@ def handle_createtaskchannel_command():
         "response_type": "ephemeral",
         "text": "📋 *Создание канала для задач:*\n\n1. Создайте новый канал с названием `#tasks` или `#задачи`\n2. Добавьте туда всех участников команды\n3. Используйте команды `/addtask` и `/showlist` в этом канале\n\n*Преимущества:*\n• Все задачи в одном месте\n• Нет путаницы в общих чатах\n• Легко отслеживать прогресс"
     })
+
+@slack_bp.route("/home", methods=["POST"])
+def handle_home_tab():
+    """Handle home tab events"""
+    if not verify_slack_request(request):
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    payload = json.loads(request.get_data(as_text=True))
+    
+    if payload["type"] == "url_verification":
+        return jsonify({"challenge": payload["challenge"]})
+    
+    if payload["type"] == "event_callback":
+        event = payload["event"]
+        
+        if event["type"] == "app_home_opened":
+            user_id = event["user"]
+            update_home_tab(user_id)
+    
+    return jsonify({"status": "ok"})
 
 @slack_bp.route("/test", methods=["GET"])
 def test_endpoint():
