@@ -107,19 +107,29 @@ def handle_showlist_command():
             "text": "No tasks found. Create one with `/addtask [task description]`"
         })
     
-    # Format task list
-    task_list = []
+    # Format task list as table
+    task_text = "*📋 Список задач:*\n\n"
+    task_text += "```\n"
+    task_text += "Date           | Task                    | Referred | Status\n"
+    task_text += "---------------|-------------------------|----------|--------\n"
+    
     attachments = []
     
     for task in tasks:
         status_emoji = {
-            "done": "✅",
-            "no": "❌", 
-            "in progress": "🔄"
-        }.get(task.status, "❓")
+            "done": "✅ Done",
+            "no": "❌ Not Done", 
+            "in progress": "🔄 In Progress"
+        }.get(task.status, "❓ Unknown")
         
-        task_text = f"{status_emoji} *{task.created_at.strftime('%Y-%m-%d %H:%M')}* | {task.task_description} | Assigned to: *{task.assigned_to}* | Status: *{task.status}*"
-        task_list.append(task_text)
+        # Format date
+        date_str = task.created_at.strftime("%d-%b-%Y")
+        
+        # Truncate task description if too long
+        task_desc = task.task_description[:20] + "..." if len(task.task_description) > 20 else task.task_description
+        
+        # Format the row
+        task_text += f"{date_str:<14} | {task_desc:<23} | {task.assigned_to:<8} | {status_emoji}\n"
         
         # Add status change buttons for each task
         attachments.append({
@@ -150,7 +160,8 @@ def handle_showlist_command():
             ]
         })
     
-    response_text = "*Task List:*\n" + "\n".join(task_list)
+    task_text += "```\n"
+    response_text = task_text
     
     return jsonify({
         "response_type": "ephemeral",
@@ -462,18 +473,30 @@ def update_home_tab(user_id, channel_id=None):
         ]
         
         if tasks:
-            task_text = "*Ваши задачи:*\n"
+            # Create table header
+            task_text = "*📋 Список задач:*\n\n"
+            task_text += "```\n"
+            task_text += "Date           | Task                    | Referred | Status\n"
+            task_text += "---------------|-------------------------|----------|--------\n"
+            
             for task in tasks:
                 status_emoji = {
-                    "done": "✅",
-                    "no": "❌", 
-                    "in progress": "🔄"
-                }.get(task.status, "❓")
+                    "done": "✅ Done",
+                    "no": "❌ Not Done", 
+                    "in progress": "🔄 In Progress"
+                }.get(task.status, "❓ Unknown")
                 
-                task_text += f"{status_emoji} *{task.task_description}*\n"
-                task_text += f"   📅 {task.created_at.strftime('%Y-%m-%d %H:%M')}\n"
-                task_text += f"   👤 Назначено: {task.assigned_to}\n"
-                task_text += f"   📊 Статус: {task.status}\n\n"
+                # Format date
+                date_str = task.created_at.strftime("%d-%b-%Y")
+                
+                # Truncate task description if too long
+                task_desc = task.task_description[:20] + "..." if len(task.task_description) > 20 else task.task_description
+                
+                # Format the row
+                task_text += f"{date_str:<14} | {task_desc:<23} | {task.assigned_to:<8} | {status_emoji}\n"
+            
+            task_text += "```\n"
+            task_text += "\n*Используйте `/showlist` для просмотра всех задач в канале*"
             
             blocks.append({
                 "type": "section",
