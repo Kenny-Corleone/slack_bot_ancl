@@ -572,16 +572,24 @@ def handle_createtaskchannel_command():
         "text": "📋 *Создание канала для задач:*\n\n1. Создайте новый канал с названием `#tasks` или `#задачи`\n2. Добавьте туда всех участников команды\n3. Используйте команды `/addtask` и `/showlist` в этом канале\n\n*Преимущества:*\n• Все задачи в одном месте\n• Нет путаницы в общих чатах\n• Легко отслеживать прогресс"
     })
 
-@slack_bp.route("/home", methods=["POST"])
+@slack_bp.route("/home", methods=["GET", "POST"])
 def handle_home_tab():
     """Handle home tab events"""
-    if not verify_slack_request(request):
-        return jsonify({"error": "Unauthorized"}), 401
+    if request.method == "GET":
+        return jsonify({"status": "ok", "message": "Home tab endpoint is working"})
     
-    payload = json.loads(request.get_data(as_text=True))
+    # For URL verification, we don't need to verify the request
+    try:
+        payload = json.loads(request.get_data(as_text=True))
+    except json.JSONDecodeError:
+        return jsonify({"error": "Invalid JSON"}), 400
     
     if payload["type"] == "url_verification":
         return jsonify({"challenge": payload["challenge"]})
+    
+    # For actual events, verify the request
+    if not verify_slack_request(request):
+        return jsonify({"error": "Unauthorized"}), 401
     
     if payload["type"] == "event_callback":
         event = payload["event"]
