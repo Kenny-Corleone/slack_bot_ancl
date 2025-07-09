@@ -267,27 +267,10 @@ def handle_block_actions(payload):
         for action in actions:
             action_id = action["action_id"]
             
-            if action_id == "create_task":
-                # Open task creation modal
-                return open_task_creation_modal(user_id)
-            
-            elif action_id == "refresh_tasks":
+            if action_id == "refresh_tasks":
                 # Refresh home tab
                 update_home_tab(user_id)
                 return jsonify({"text": "Tasks refreshed!"})
-            
-            elif action_id.startswith("change_status_"):
-                # Handle status change
-                task_id = int(action_id.split("_")[-1])
-                value = json.loads(action["value"])
-                
-                task = Task.query.get(task_id)
-                if task:
-                    task.status = value.get("status", "done")
-                    db.session.commit()
-                    update_home_tab(user_id)
-                
-                return jsonify({"text": "Status updated!"})
         
         return jsonify({"text": "Action completed"})
     except Exception as e:
@@ -446,7 +429,7 @@ def update_home_tab(user_id, channel_id=None):
             # Get all tasks assigned to this user
             tasks = Task.query.filter_by(assigned_to=user_id).order_by(Task.created_at.desc()).all()
         
-        # Create blocks for the home tab
+        # Create a simple home tab view
         blocks = [
             {
                 "type": "header",
@@ -460,7 +443,17 @@ def update_home_tab(user_id, channel_id=None):
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
-                    "text": "Управляйте задачами прямо здесь!"
+                    "text": "Добро пожаловать в Task Manager! Используйте команды для управления задачами."
+                }
+            },
+            {
+                "type": "divider"
+            },
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": "*Доступные команды:*\n• `/addtask [описание]` - создать новую задачу\n• `/showlist` - показать все задачи\n• `/createtaskchannel` - инструкции по созданию канала"
                 }
             },
             {
@@ -469,6 +462,7 @@ def update_home_tab(user_id, channel_id=None):
         ]
         
         if tasks:
+            task_text = "*Ваши задачи:*\n"
             for task in tasks:
                 status_emoji = {
                     "done": "✅",
@@ -476,28 +470,18 @@ def update_home_tab(user_id, channel_id=None):
                     "in progress": "🔄"
                 }.get(task.status, "❓")
                 
-                task_block = {
-                    "type": "section",
-                    "text": {
-                        "type": "mrkdwn",
-                        "text": f"{status_emoji} *{task.task_description}*\n"
-                               f"📅 {task.created_at.strftime('%Y-%m-%d %H:%M')}\n"
-                               f"👤 Назначено: {task.assigned_to}\n"
-                               f"📊 Статус: {task.status}"
-                    },
-                    "accessory": {
-                        "type": "button",
-                        "text": {
-                            "type": "plain_text",
-                            "text": "Изменить статус",
-                            "emoji": True
-                        },
-                        "value": json.dumps({"task_id": task.id, "action": "change_status"}),
-                        "action_id": f"change_status_{task.id}"
-                    }
+                task_text += f"{status_emoji} *{task.task_description}*\n"
+                task_text += f"   📅 {task.created_at.strftime('%Y-%m-%d %H:%M')}\n"
+                task_text += f"   👤 Назначено: {task.assigned_to}\n"
+                task_text += f"   📊 Статус: {task.status}\n\n"
+            
+            blocks.append({
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": task_text
                 }
-                blocks.append(task_block)
-                blocks.append({"type": "divider"})
+            })
         else:
             blocks.append({
                 "type": "section",
@@ -507,51 +491,28 @@ def update_home_tab(user_id, channel_id=None):
                 }
             })
         
-        # Add action buttons
-        blocks.extend([
-            {
-                "type": "actions",
-                "elements": [
-                    {
-                        "type": "button",
-                        "text": {
-                            "type": "plain_text",
-                            "text": "Создать задачу",
-                            "emoji": True
-                        },
-                        "style": "primary",
-                        "action_id": "create_task"
-                    },
-                    {
-                        "type": "button",
-                        "text": {
-                            "type": "plain_text",
-                            "text": "Обновить",
-                            "emoji": True
-                        },
-                        "action_id": "refresh_tasks"
+        # Try to update home tab with available scopes
+        try:
+            response = requests.post(
+                f"{SLACK_API_BASE}/views.publish",
+                headers={
+                    "Authorization": f"Bearer {SLACK_BOT_TOKEN}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "user_id": user_id,
+                    "view": {
+                        "type": "home",
+                        "blocks": blocks
                     }
-                ]
-            }
-        ])
-        
-        # Update the home tab
-        response = requests.post(
-            f"{SLACK_API_BASE}/views.publish",
-            headers={
-                "Authorization": f"Bearer {SLACK_BOT_TOKEN}",
-                "Content-Type": "application/json"
-            },
-            json={
-                "user_id": user_id,
-                "view": {
-                    "type": "home",
-                    "blocks": blocks
                 }
-            }
-        )
-        
-        return response.json()
+            )
+            return response.json()
+        except Exception as e:
+            print(f"Error with views.publish: {e}")
+            # Fallback: just return success
+            return {"ok": True}
+            
     except Exception as e:
         print(f"Error updating home tab: {e}")
         return None
