@@ -608,4 +608,32 @@ def test_endpoint():
         "message": "Slack Task Assignment Bot is running",
         "team_members": TEAM_MEMBERS,
         "status_options": STATUS_OPTIONS
-    }) 
+    })
+
+@slack_bp.route("/events", methods=["GET", "POST"])
+def handle_events():
+    """Handle Slack events and URL verification"""
+    if request.method == "GET":
+        return jsonify({"status": "ok", "message": "Events endpoint is working"})
+    
+    # For URL verification, we don't need to verify the request
+    try:
+        payload = json.loads(request.get_data(as_text=True))
+    except json.JSONDecodeError:
+        return jsonify({"error": "Invalid JSON"}), 400
+    
+    if payload["type"] == "url_verification":
+        return jsonify({"challenge": payload["challenge"]})
+    
+    # For actual events, verify the request
+    if not verify_slack_request(request):
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    if payload["type"] == "event_callback":
+        event = payload["event"]
+        
+        if event["type"] == "app_home_opened":
+            user_id = event["user"]
+            update_home_tab(user_id)
+    
+    return jsonify({"status": "ok"}) 
